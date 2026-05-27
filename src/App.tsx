@@ -18,6 +18,44 @@ const NSFW_CATEGORIES: { id: Category; label: string }[] = [
   { id: 'blowjob', label: 'Blowjob' },
 ];
 
+const CACHE_DURATION_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+interface CacheEntry {
+  timestamp: number;
+  data: AnimeImage[];
+}
+
+const getCacheKey = (cat: string, nsfw: boolean) => `hwaifus_cache_${cat}_${nsfw}`;
+
+const getCachedImages = (cat: string, nsfw: boolean): AnimeImage[] | null => {
+  try {
+    const key = getCacheKey(cat, nsfw);
+    const item = localStorage.getItem(key);
+    if (!item) return null;
+    const entry: CacheEntry = JSON.parse(item);
+    if (Date.now() - entry.timestamp > CACHE_DURATION_MS) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return entry.data;
+  } catch (e) {
+    return null;
+  }
+};
+
+const setCachedImages = (cat: string, nsfw: boolean, data: AnimeImage[]) => {
+  try {
+    const key = getCacheKey(cat, nsfw);
+    const entry: CacheEntry = {
+      timestamp: Date.now(),
+      data
+    };
+    localStorage.setItem(key, JSON.stringify(entry));
+  } catch (e) {
+    console.warn('LocalStorage quota exceeded or error:', e);
+  }
+};
+
 export default function App() {
   const [activeCategory, setActiveCategory] = useState<Category>('waifu');
   const [isNsfw, setIsNsfw] = useState(false);
@@ -27,6 +65,20 @@ export default function App() {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallable, setIsInstallable] = useState(false);
+
+  const [columns, setColumns] = useState(1);
+
+  useEffect(() => {
+    const updateColumns = () => {
+      if (window.innerWidth >= 1280) setColumns(4);
+      else if (window.innerWidth >= 1024) setColumns(3);
+      else if (window.innerWidth >= 640) setColumns(2);
+      else setColumns(1);
+    };
+    updateColumns();
+    window.addEventListener('resize', updateColumns);
+    return () => window.removeEventListener('resize', updateColumns);
+  }, []);
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -59,6 +111,15 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
+      if (!append) {
+        const cached = getCachedImages(category, nsfw);
+        if (cached && cached.length > 0) {
+          setImages(cached);
+          setLoading(false);
+          return;
+        }
+      }
+
       if (nsfw) {
         const requests = Array.from({ length: 15 }).map(() =>
           fetch(`https://api.waifu.pics/nsfw/${category}`).then(res => {
@@ -72,13 +133,21 @@ export default function App() {
           .map(res => res.value.url);
         
         const newImages = dataFiles.map((url: string) => ({ url }));
-        setImages(prev => append ? [...prev, ...newImages] : newImages);
+        setImages(prev => {
+          const updated = append ? [...prev, ...newImages] : newImages;
+          setCachedImages(category, nsfw, updated);
+          return updated;
+        });
       } else {
         const res = await fetch(`https://nekos.best/api/v2/${category}?amount=20`);
         if (!res.ok) throw new Error('Failed to fetch images');
         const data = await res.json();
         
-        setImages(prev => append ? [...prev, ...data.results] : data.results);
+        setImages(prev => {
+          const updated = append ? [...prev, ...data.results] : data.results;
+          setCachedImages(category, nsfw, updated);
+          return updated;
+        });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -89,7 +158,9 @@ export default function App() {
 
   // Initial load & category switch
   useEffect(() => {
-    setImages([]);
+    if (!getCachedImages(activeCategory, isNsfw)) {
+      setImages([]);
+    }
     fetchImages(activeCategory, isNsfw, false);
   }, [activeCategory, isNsfw]);
 
@@ -121,15 +192,27 @@ export default function App() {
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-200 font-sans selection:bg-fuchsia-500/30 pb-20">
       {/* Header / Navbar */}
-      <header className="sticky top-0 z-40 bg-neutral-950/80 backdrop-blur-xl border-b border-neutral-800/50">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-display font-bold tracking-tight text-white">
+      <header className="sticky top-0 z-40 bg-neutral-950/80 backdrop-blur-xl border-b border-neutral-800/50 shadow-md">
+        <div className="max-w-7xl mx-auto px-4 h-16 md:h-20 flex items-center justify-between relative">
+          
+          {/* Left Space for Flex Balance */}
+          <div className="flex-1 hidden sm:flex"></div>
+
+          {/* Centered Stylish Logo */}
+          <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-0 flex items-center justify-center w-full pointer-events-none">
+            <h1 className="text-2xl md:text-3xl font-display font-black tracking-[0.2em] uppercase text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-400 via-pink-400 to-purple-500 drop-shadow-[0_0_15px_rgba(232,121,249,0.3)]">
               Hwaifus
             </h1>
           </div>
           
-          <div className="flex items-center gap-4">
+          {/* Right Actions Menu */}
+          <div className="flex-1 flex items-center justify-end gap-3 z-10 w-full sm:w-auto">
+            <div className="hidden lg:flex items-center">
+              <span className="text-[10px] sm:text-xs uppercase tracking-widest text-neutral-500 font-bold px-4 border-r border-neutral-800">
+                Powered by 𝙱𝙹𝙴 ~ Clan
+              </span>
+            </div>
+
             <AnimatePresence>
               {isInstallable && (
                 <motion.button
@@ -137,17 +220,18 @@ export default function App() {
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
                   onClick={handleInstallClick}
-                  className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white text-xs sm:text-sm font-medium rounded-full shadow-lg shadow-fuchsia-500/20 transition-all transform hover:scale-105 active:scale-95"
+                  className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white text-xs sm:text-sm font-medium rounded-full shadow-[0_0_15px_rgba(192,38,211,0.4)] transition-all transform hover:scale-105 active:scale-95 border border-fuchsia-400/20"
                   title="Install App"
                 >
                   <DownloadCloud className="w-4 h-4" />
-                  <span className="hidden sm:inline">Install App</span>
+                  <span className="hidden sm:inline font-bold tracking-wide">Install</span>
                 </motion.button>
               )}
             </AnimatePresence>
-            <div className="hidden sm:flex items-center gap-1">
-              <span className="text-xs text-neutral-500 font-medium px-3">
-                Powered by 𝙱𝙹𝙴 ~ Clan
+
+            <div className="flex lg:hidden items-center justify-end">
+              <span className="text-[9px] uppercase tracking-widest text-neutral-500 font-bold pr-1">
+                <span className="hidden sm:inline">Powered by </span>𝙱𝙹𝙴
               </span>
             </div>
           </div>
@@ -240,16 +324,22 @@ export default function App() {
           </div>
         )}
 
-        <div className="masonry-grid">
-          <AnimatePresence mode="popLayout">
-            {images.map((img, idx) => (
-              <ImageCard 
-                key={`${img.url}-${idx}`} 
-                image={img} 
-                index={idx} 
-              />
-            ))}
-          </AnimatePresence>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
+          {Array.from({ length: 4 }).map((_, colIndex) => (
+            <div key={colIndex} className={`flex flex-col gap-6 ${colIndex >= columns ? 'hidden' : 'flex'}`}>
+              <AnimatePresence mode="popLayout">
+                {images
+                  .filter((_, idx) => idx % columns === colIndex)
+                  .map((img, idx) => (
+                  <ImageCard 
+                    key={`${img.url}-${idx}`} 
+                    image={img} 
+                    index={idx} 
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
+          ))}
         </div>
 
         {/* Loading State / Load More */}

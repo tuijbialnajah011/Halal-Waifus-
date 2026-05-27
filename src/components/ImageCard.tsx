@@ -52,18 +52,16 @@ export default function ImageCard({ image, index }: ImageCardProps) {
     >
       {/* Loading Skeleton */}
       {!imageLoaded && (
-        <div className="absolute inset-0 bg-neutral-800 animate-pulse flex items-center justify-center">
+        <div className="absolute inset-0 bg-neutral-800 animate-pulse flex items-center justify-center min-h-[300px]">
           <Loader2 className="w-6 h-6 text-neutral-600 animate-spin" />
         </div>
       )}
 
       {/* Main Image */}
-      {/* Set a min height to prevent jumping before image loads, though masonry will reflow.
-          If we have dimensions, we could calculate aspect ratio. */}
       <img
         src={image.url}
         alt={`Anime Art by ${image.artist_name || 'Unknown'}`}
-        className={`w-full h-auto object-cover transition-transform duration-700 ease-out ${isHovered ? 'scale-105' : 'scale-100'} ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+        className={`w-full h-auto min-h-[300px] object-cover transition-transform duration-700 ease-out ${isHovered ? 'scale-105' : 'scale-100'} ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
         onLoad={() => setImageLoaded(true)}
         loading="lazy"
         crossOrigin="anonymous"
