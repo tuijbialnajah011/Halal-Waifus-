@@ -1,32 +1,55 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Sparkles, Image as ImageIcon, Loader2, ArrowUpCircle } from 'lucide-react';
+import { Image as ImageIcon, Loader2, ArrowUpCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ImageCard from './components/ImageCard';
 import { Category, AnimeImage } from './types';
 
-const CATEGORIES: { id: Category; label: string }[] = [
+const SFW_CATEGORIES: { id: Category; label: string }[] = [
   { id: 'waifu', label: 'Waifu' },
   { id: 'husbando', label: 'Husbando' },
   { id: 'kitsune', label: 'Kitsune' },
   { id: 'neko', label: 'Neko' },
 ];
 
+const NSFW_CATEGORIES: { id: Category; label: string }[] = [
+  { id: 'waifu', label: 'Waifu' },
+  { id: 'neko', label: 'Neko' },
+  { id: 'trap', label: 'Trap' },
+  { id: 'blowjob', label: 'Blowjob' },
+];
+
 export default function App() {
   const [activeCategory, setActiveCategory] = useState<Category>('waifu');
+  const [isNsfw, setIsNsfw] = useState(false);
   const [images, setImages] = useState<AnimeImage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
-  const fetchImages = async (category: Category, append = false) => {
+  const fetchImages = async (category: Category, nsfw: boolean, append = false) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`https://nekos.best/api/v2/${category}?amount=20`);
-      if (!res.ok) throw new Error('Failed to fetch images');
-      const data = await res.json();
-      
-      setImages(prev => append ? [...prev, ...data.results] : data.results);
+      if (nsfw) {
+        const res = await fetch(`https://api.waifu.pics/many/nsfw/${category}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        if (!res.ok) throw new Error('Failed to fetch images');
+        const data = await res.json();
+        
+        const newImages = data.files.map((url: string) => ({
+          url,
+        }));
+        setImages(prev => append ? [...prev, ...newImages] : newImages);
+      } else {
+        const res = await fetch(`https://nekos.best/api/v2/${category}?amount=20`);
+        if (!res.ok) throw new Error('Failed to fetch images');
+        const data = await res.json();
+        
+        setImages(prev => append ? [...prev, ...data.results] : data.results);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -37,8 +60,8 @@ export default function App() {
   // Initial load & category switch
   useEffect(() => {
     setImages([]);
-    fetchImages(activeCategory, false);
-  }, [activeCategory]);
+    fetchImages(activeCategory, isNsfw, false);
+  }, [activeCategory, isNsfw]);
 
   // Handle scroll to show/hide "Scroll to Top" button
   useEffect(() => {
@@ -50,15 +73,15 @@ export default function App() {
         window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 800 &&
         !loading
       ) {
-        fetchImages(activeCategory, true);
+        fetchImages(activeCategory, isNsfw, true);
       }
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [activeCategory, loading]);
+  }, [activeCategory, isNsfw, loading]);
 
   const loadMore = () => {
-    if (!loading) fetchImages(activeCategory, true);
+    if (!loading) fetchImages(activeCategory, isNsfw, true);
   };
 
   const scrollToTop = () => {
@@ -71,24 +94,23 @@ export default function App() {
       <header className="sticky top-0 z-40 bg-neutral-950/80 backdrop-blur-xl border-b border-neutral-800/50">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-gradient-to-br from-fuchsia-500 to-purple-600 rounded-xl shadow-[0_0_20px_rgba(217,70,239,0.3)]">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
-            <h1 className="text-xl font-display font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-neutral-400">
-              Anime<span className="text-fuchsia-400">Vault</span>
+            <h1 className="text-2xl font-display font-bold tracking-tight text-white">
+              Hwaifus
             </h1>
           </div>
           
           <div className="hidden sm:flex items-center gap-1">
-            <span className="text-xs text-neutral-500 font-medium px-3">Powered by Nekos.best</span>
+            <span className="text-xs text-neutral-500 font-medium px-3">
+              Powered by Nekos.best & waifu.pics
+            </span>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 mt-8">
         {/* Category Navigation */}
-        <div className="flex flex-col items-center mb-10 space-y-6">
-          <div className="text-center space-y-2">
+        <div className="flex flex-col items-center mb-10 w-full">
+          <div className="text-center space-y-2 mb-8">
             <h2 className="text-3xl sm:text-4xl font-display font-bold text-white tracking-tight">
               Discover Unlimited Art
             </h2>
@@ -97,30 +119,73 @@ export default function App() {
             </p>
           </div>
 
-          <div className="flex flex-wrap justify-center gap-2 p-1 bg-neutral-900/50 rounded-2xl border border-neutral-800 backdrop-blur-sm">
-            {CATEGORIES.map((cat) => (
+          {/* SFW / NSFW Toggle */}
+          <div className="flex items-center justify-center mb-8">
+            <div className="flex items-center p-1 bg-neutral-900 rounded-full border border-neutral-800 shadow-inner">
               <button
-                key={cat.id}
-                onClick={() => setActiveCategory(cat.id)}
-                className={`px-6 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 relative ${
-                  activeCategory === cat.id
-                    ? 'text-white shadow-lg'
-                    : 'text-neutral-400 hover:text-white hover:bg-neutral-800/50'
+                onClick={() => {
+                  if (isNsfw) {
+                    setIsNsfw(false);
+                    setActiveCategory('waifu');
+                  }
+                }}
+                className={`px-8 py-2.5 rounded-full text-sm font-bold transition-all duration-300 ${
+                  !isNsfw
+                    ? 'bg-neutral-100 text-neutral-950 shadow-sm transform scale-[1.02]'
+                    : 'text-neutral-500 hover:text-neutral-300'
                 }`}
               >
-                {activeCategory === cat.id && (
-                  <motion.div
-                    layoutId="activeCategoryTab"
-                    className="absolute inset-0 bg-gradient-to-r from-fuchsia-600 to-purple-600 rounded-xl"
-                    initial={false}
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                  />
-                )}
-                <span className="relative z-10 flex items-center gap-2">
-                  {cat.label}
-                </span>
+                SFW
               </button>
-            ))}
+              <button
+                onClick={() => {
+                  if (!isNsfw) {
+                    setIsNsfw(true);
+                    setActiveCategory('waifu');
+                  }
+                }}
+                className={`px-8 py-2.5 rounded-full text-sm font-bold transition-all duration-300 ${
+                  isNsfw
+                    ? 'bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.3)] transform scale-[1.02]'
+                    : 'text-neutral-500 hover:text-red-400'
+                }`}
+              >
+                NSFW
+              </button>
+            </div>
+          </div>
+
+          <div className="w-full relative">
+            {/* Fade Edges for Scroll Area */}
+            <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-neutral-950 to-transparent pointer-events-none z-10" />
+            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-neutral-950 to-transparent pointer-events-none z-10" />
+            
+            {/* Scrollable Row */}
+            <div className="flex overflow-x-auto scrollbar-hide py-3 gap-2 px-6 justify-start scroll-smooth items-center">
+              {(isNsfw ? NSFW_CATEGORIES : SFW_CATEGORIES).map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={`flex-shrink-0 px-6 py-2.5 rounded-full text-sm font-medium transition-all duration-300 relative ${
+                    activeCategory === cat.id
+                      ? 'text-white shadow-lg'
+                      : 'text-neutral-400 hover:text-white hover:bg-neutral-800/80'
+                  }`}
+                >
+                  {activeCategory === cat.id && (
+                    <motion.div
+                      layoutId="activeCategoryTab"
+                      className={`absolute inset-0 rounded-full ${isNsfw ? 'bg-gradient-to-r from-red-600 to-rose-600' : 'bg-gradient-to-r from-fuchsia-600 to-purple-600'}`}
+                      initial={false}
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative z-10 flex items-center gap-2 whitespace-nowrap">
+                    {cat.label}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -129,7 +194,7 @@ export default function App() {
           <div className="w-full p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-center mb-8">
             <p>{error}</p>
             <button 
-              onClick={() => fetchImages(activeCategory, true)}
+              onClick={() => fetchImages(activeCategory, isNsfw, true)}
               className="mt-2 text-sm underline hover:text-red-300"
             >
               Try again

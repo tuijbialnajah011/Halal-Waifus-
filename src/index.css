@@ -7,6 +7,14 @@
 }
 
 @layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
   .masonry-grid {
     column-count: 1;
     column-gap: 1.5rem;

@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Hwaifus",
+  "description": "An anime picture gallery for SFW and NSFW waifu images.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
