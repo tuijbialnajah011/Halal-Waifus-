@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Image as ImageIcon, Loader2, ArrowUpCircle } from 'lucide-react';
+import { Image as ImageIcon, Loader2, ArrowUpCircle, DownloadCloud } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ImageCard from './components/ImageCard';
 import { Category, AnimeImage } from './types';
@@ -25,23 +25,53 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      console.log('User accepted the install prompt');
+    } else {
+      console.log('User dismissed the install prompt');
+    }
+    setDeferredPrompt(null);
+    setIsInstallable(false);
+  };
 
   const fetchImages = async (category: Category, nsfw: boolean, append = false) => {
     setLoading(true);
     setError(null);
     try {
       if (nsfw) {
-        const res = await fetch(`https://api.waifu.pics/many/nsfw/${category}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({})
-        });
-        if (!res.ok) throw new Error('Failed to fetch images');
-        const data = await res.json();
+        const requests = Array.from({ length: 15 }).map(() =>
+          fetch(`https://api.waifu.pics/nsfw/${category}`).then(res => {
+            if (!res.ok) throw new Error('Network error');
+            return res.json();
+          })
+        );
+        const results = await Promise.allSettled(requests);
+        const dataFiles = results
+          .filter((res): res is PromiseFulfilledResult<any> => res.status === 'fulfilled')
+          .map(res => res.value.url);
         
-        const newImages = data.files.map((url: string) => ({
-          url,
-        }));
+        const newImages = dataFiles.map((url: string) => ({ url }));
         setImages(prev => append ? [...prev, ...newImages] : newImages);
       } else {
         const res = await fetch(`https://nekos.best/api/v2/${category}?amount=20`);
@@ -99,10 +129,27 @@ export default function App() {
             </h1>
           </div>
           
-          <div className="hidden sm:flex items-center gap-1">
-            <span className="text-xs text-neutral-500 font-medium px-3">
-              Powered by Nekos.best & waifu.pics
-            </span>
+          <div className="flex items-center gap-4">
+            <AnimatePresence>
+              {isInstallable && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  onClick={handleInstallClick}
+                  className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-fuchsia-600 to-purple-600 hover:from-fuchsia-500 hover:to-purple-500 text-white text-xs sm:text-sm font-medium rounded-full shadow-lg shadow-fuchsia-500/20 transition-all transform hover:scale-105 active:scale-95"
+                  title="Install App"
+                >
+                  <DownloadCloud className="w-4 h-4" />
+                  <span className="hidden sm:inline">Install App</span>
+                </motion.button>
+              )}
+            </AnimatePresence>
+            <div className="hidden sm:flex items-center gap-1">
+              <span className="text-xs text-neutral-500 font-medium px-3">
+                Powered by 𝙱𝙹𝙴 ~ Clan
+              </span>
+            </div>
           </div>
         </div>
       </header>
@@ -110,15 +157,6 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 mt-8">
         {/* Category Navigation */}
         <div className="flex flex-col items-center mb-10 w-full">
-          <div className="text-center space-y-2 mb-8">
-            <h2 className="text-3xl sm:text-4xl font-display font-bold text-white tracking-tight">
-              Discover Unlimited Art
-            </h2>
-            <p className="text-neutral-400 text-sm sm:text-base max-w-lg mx-auto">
-              Explore thousands of high-quality anime pictures. Download your favorites instantly.
-            </p>
-          </div>
-
           {/* SFW / NSFW Toggle */}
           <div className="flex items-center justify-center mb-8">
             <div className="flex items-center p-1 bg-neutral-900 rounded-full border border-neutral-800 shadow-inner">

@@ -1,0 +1,17 @@
+{
+  "name": "Hwaifus",
+  "short_name": "Hwaifus",
+  "description": "An anime picture gallery for SFW and NSFW waifu images.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#d946ef",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
