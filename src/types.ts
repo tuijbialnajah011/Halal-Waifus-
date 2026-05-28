@@ -1,5 +1,5 @@
-export type SfwCategory = 'waifu' | 'husbando' | 'kitsune' | 'neko';
-export type NsfwCategory = 'waifu' | 'neko' | 'trap' | 'blowjob';
+export type SfwCategory = 'waifu' | 'husbando' | 'kitsune' | 'neko' | 'maid' | 'swimsuit' | 'uniform';
+export type NsfwCategory = 'waifu' | 'neko' | 'trap' | 'blowjob' | 'boobs' | 'ass' | 'yuri' | 'hentai' | 'ecchi';
 export type Category = SfwCategory | NsfwCategory;
 
 export interface AnimeImage {
